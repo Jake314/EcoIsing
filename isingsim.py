@@ -1,7 +1,10 @@
 import pygame as pg
 import numpy as np
+from math import exp
+import copy
 
 
+# Gets the total energy across the entire grid
 def get_sum(grid):
     total = 0
     for i, row in enumerate(grid):
@@ -12,12 +15,27 @@ def get_sum(grid):
                 total += (-1, 1)[cell["spin"]] * (-1, 1)[row[j + 1]["spin"]]
     return total
 
+
+# Gets the energy at a specific cell with regard to its neighbours
+def local_energy(grid, row, col):
+    energy = 0
+    spin = (-1, 1)[int(grid[row][col]["spin"])]
+    for i in [row - 1, row + 1]:
+        if i >= 0 and i < len(grid):
+            energy += (-1, 1)[int(grid[i][col]["spin"])] * spin
+    for j in [col - 1, col + 1]:
+        if j >= 0 and j < len(grid[0]):
+            energy += (-1, 1)[int(grid[row][j]["spin"])] * spin
+    return energy
+
+
 start_loc = 0
-grid_size = 20
-cell_size = 20
-gap_size = 2
-MIX_START = False
+grid_size = 50
+cell_size = 5
+gap_size = 0
+MIX_START = True
 COOLDOWN_TIMER = 20
+beta = 1
 
 pg.init()
 text = pg.font.SysFont("Comic Sans MS", 30)
@@ -57,16 +75,28 @@ while running:
     mouse_display = text.render(str(select), False, (0, 0, 0))
     energy_display = text.render(str(get_sum(df)), False, (0, 0, 0))
 
+    randx = np.random.randint(grid_size)
+    randy = np.random.randint(grid_size)
+
+    temp = copy.deepcopy(df)
+    df[randy][randx]["spin"] = not df[randy][randx]["spin"]
+    energy_diff = local_energy(df, randy, randx) - local_energy(temp, randy, randx)
+    local_display = text.render(str(local_energy(df, select[0], select[1])), False, (0, 0, 0))
+    if local_energy(df, randy, randx) < local_energy(temp, randy, randx): 
+        #if np.random.random() > exp(-beta * energy_diff):
+        df = temp.copy()
+
+    if pg.mouse.get_pressed()[0] and not cooldown:
+        cooldown = COOLDOWN_TIMER
+        df[select[0]][select[1]]["spin"] = not df[select[0]][select[1]]["spin"]
+
     screen.fill("black")
     for i, row in enumerate(df):
         for j, cell in enumerate(row):
             pg.draw.rect(screen, cols[int(cell["spin"])], cell["rect"])
     
-    if pg.mouse.get_pressed()[0] and not cooldown:
-        cooldown = COOLDOWN_TIMER
-        df[select[0]][select[1]]["spin"] = not df[select[0]][select[1]]["spin"]
-    
     screen.blit(energy_display, (0, 0))
+    screen.blit(local_display, (screen_size - 50, 0))
 
     pg.display.flip()
 
