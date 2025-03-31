@@ -1,7 +1,6 @@
 import pygame as pg
 import numpy as np
 from math import exp
-import copy
 
 
 # Gets the total energy across the entire grid
@@ -18,24 +17,29 @@ def get_sum(grid):
 
 # Gets the energy at a specific cell with regard to its neighbours
 def local_energy(grid, row, col):
-    energy = 0
     spin = (-1, 1)[int(grid[row][col]["spin"])]
+
+    neighbours = []
     for i in [row - 1, row + 1]:
-        if i >= 0 and i < len(grid):
-            energy += (-1, 1)[int(grid[i][col]["spin"])] * spin
+        if i >= 0 and i < grid_size:
+            neighbours.append((-1, 1)[int(grid[i][col]["spin"])])
     for j in [col - 1, col + 1]:
-        if j >= 0 and j < len(grid[0]):
-            energy += (-1, 1)[int(grid[row][j]["spin"])] * spin
-    return energy
+        if j >= 0 and j < grid_size:
+            neighbours.append((-1, 1)[int(grid[row][j]["spin"])])
+    
+    current = -sum([spin * n for n in neighbours])
+    new = -sum([-spin * n for n in neighbours])
+
+    return new - current
 
 
 start_loc = 0
-grid_size = 50
-cell_size = 5
+grid_size = 10
+cell_size = 30
 gap_size = 0
-MIX_START = True
+MIX_START = False
 COOLDOWN_TIMER = 20
-beta = 1
+beta = 10
 
 pg.init()
 text = pg.font.SysFont("Comic Sans MS", 30)
@@ -78,13 +82,13 @@ while running:
     randx = np.random.randint(grid_size)
     randy = np.random.randint(grid_size)
 
-    temp = copy.deepcopy(df)
-    df[randy][randx]["spin"] = not df[randy][randx]["spin"]
-    energy_diff = local_energy(df, randy, randx) - local_energy(temp, randy, randx)
+    energy_diff = local_energy(df, randy, randx)
     local_display = text.render(str(local_energy(df, select[0], select[1])), False, (0, 0, 0))
-    if local_energy(df, randy, randx) < local_energy(temp, randy, randx): 
-        #if np.random.random() > exp(-beta * energy_diff):
-        df = temp.copy()
+    if local_energy(df, randy, randx) < 0:
+        df[randy][randx]["spin"] = not df[randy][randx]["spin"]
+    else:
+        if np.random.random() < exp(-beta * energy_diff):
+            df[randy][randx]["spin"] = not df[randy][randx]["spin"]
 
     if pg.mouse.get_pressed()[0] and not cooldown:
         cooldown = COOLDOWN_TIMER
