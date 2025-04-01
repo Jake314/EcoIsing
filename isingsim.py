@@ -27,19 +27,20 @@ def local_energy(grid, row, col):
         if j >= 0 and j < grid_size:
             neighbours.append((-1, 1)[int(grid[row][j]["spin"])])
     
-    current = -sum([spin * n for n in neighbours])
-    new = -sum([-spin * n for n in neighbours])
+    current = -J * sum([spin * n for n in neighbours])
+    new = -J * sum([-spin * n for n in neighbours])
 
     return new - current
 
 
-start_loc = 0
-grid_size = 10
-cell_size = 30
-gap_size = 0
-MIX_START = False
-COOLDOWN_TIMER = 20
-beta = 10
+start_loc = 0  # Full grid offset
+grid_size = 50  # Number of cells on each side of grid
+cell_size = 12  # Side length of cell
+gap_size = 0  # Space between cells
+MIX_START = True  # Randomized start or not
+COOLDOWN_TIMER = 20  # Clicking cooldown
+beta = 100  # inverse temperature
+J = .1  # Coupling constant
 
 pg.init()
 text = pg.font.SysFont("Comic Sans MS", 30)
@@ -71,13 +72,13 @@ while running:
         if event.type == pg.QUIT:
             running = False
 
-    dt = clock.tick(60)/1000
+    #dt = clock.tick(60)/1000
     if cooldown:
         cooldown -= 1
 
     select = (np.array(pg.mouse.get_pos()) - start_loc) // (cell_size + gap_size)
     mouse_display = text.render(str(select), False, (0, 0, 0))
-    energy_display = text.render(str(get_sum(df)), False, (0, 0, 0))
+    # energy_display = text.render(str(get_sum(df)), False, (0, 0, 0))
 
     randx = np.random.randint(grid_size)
     randy = np.random.randint(grid_size)
@@ -99,7 +100,7 @@ while running:
         for j, cell in enumerate(row):
             pg.draw.rect(screen, cols[int(cell["spin"])], cell["rect"])
     
-    screen.blit(energy_display, (0, 0))
+    # screen.blit(energy_display, (0, 0))
     screen.blit(local_display, (screen_size - 50, 0))
 
     pg.display.flip()
