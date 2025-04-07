@@ -32,14 +32,14 @@ def local_energy(grid, row, col):
 
     return new - current
 
-
-start_loc = 0  # Full grid offset
+# grid,beta,J = 50,10,.1
+start_loc = (0, 0)  # Full grid offset
 grid_size = 50  # Number of cells on each side of grid
 cell_size = 12  # Side length of cell
 gap_size = 0  # Space between cells
 MIX_START = True  # Randomized start or not
 COOLDOWN_TIMER = 20  # Clicking cooldown
-beta = 100  # inverse temperature
+beta = 10  # inverse temperature
 J = .1  # Coupling constant
 
 pg.init()
@@ -59,8 +59,8 @@ for i in range(grid_size):
         df[i].append({
             "spin": bool(np.random.randint(2)) if MIX_START else False,
             "rect": pg.Rect(
-                start_loc + (cell_size + gap_size)*i,
-                start_loc + (cell_size + gap_size)*j,
+                start_loc[0] + (cell_size + gap_size)*i,
+                start_loc[1] + (cell_size + gap_size)*j,
                 cell_size,
                 cell_size
             )})
