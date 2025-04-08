@@ -35,10 +35,10 @@ def local_energy(grid, row, col):
 display_local = False
 display_total = False
 start_loc = (50, 0)  # Full grid offset
-grid_size = 15  # Number of cells on each side of grid
+grid_size = 20  # Number of cells on each side of grid
 cell_size = 600//grid_size  # Side length of cell
 gap_size = 0  # Space between cells
-MIX_START = True  # Randomized start or not
+MIX_START = False  # Randomized start or not
 COOLDOWN_TIMER = 60  # Clicking cooldown
 J = 1  # Coupling constant
 
@@ -51,7 +51,7 @@ thermo_range = (0, 5)
 temp = 1.
 thermo_pos = [25, thermo_offset + (temp/(thermo_range[1] - thermo_range[0])) * (screen_size - 2 * thermo_offset)]
 
-screen = pg.display.set_mode((screen_size, screen_size))
+screen = pg.display.set_mode((screen_size + start_loc[0], screen_size + start_loc[1]))
 pg.display.set_caption("Ising Simulation")
 clock = pg.time.Clock()
 running = True
@@ -93,10 +93,12 @@ while running:
     energy_diff = local_energy(df, randy, randx)
     if display_local:
         local_display = text.render(str(local_energy(df, select[0], select[1])), False, (0, 0, 0))
-    if local_energy(df, randy, randx) < 0:
+    if energy_diff < 0:
         df[randy][randx]["spin"] = not df[randy][randx]["spin"]
     else:
-        if np.random.random() < exp(-(1/temp) * energy_diff):
+        is_edge = (randx in (0, grid_size-1), randy in (0, grid_size-1))
+        # Random flip impossible if E=8J for middle, 6J for edge, 4J for corner (max difference)
+        if energy_diff < (8 - 2 * sum(is_edge)) * J and np.random.random() < exp(-(1/temp) * energy_diff):
             df[randy][randx]["spin"] = not df[randy][randx]["spin"]
 
     if pg.mouse.get_pressed()[0]:
