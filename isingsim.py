@@ -1,6 +1,6 @@
 import pygame as pg
 import numpy as np
-from math import exp
+from math import exp, sin, cos, pi
 
 
 # Gets the total energy across the entire grid
@@ -40,6 +40,7 @@ cell_size = 600//grid_size  # Side length of cell
 gap_size = 0  # Space between cells
 MIX_START = False  # Randomized start or not
 COOLDOWN_TIMER = 60  # Clicking cooldown
+BITE_COOLDOWN = 1000
 J = 1  # Coupling constant
 
 pg.init()
@@ -50,6 +51,10 @@ thermo_offset = 20
 thermo_range = (0, 5)
 temp = 1.
 thermo_pos = [25, thermo_offset + (temp/(thermo_range[1] - thermo_range[0])) * (screen_size - 2 * thermo_offset)]
+
+herbivores = [
+    {"p": np.array((screen_size/2 + start_loc[0], screen_size/2 + start_loc[1])), "v": 1, "a": 0, "t": BITE_COOLDOWN}
+    ]
 
 screen = pg.display.set_mode((screen_size + start_loc[0], screen_size + start_loc[1]))
 pg.display.set_caption("Ising Simulation")
@@ -76,6 +81,8 @@ while running:
     for event in pg.event.get():
         if event.type == pg.QUIT:
             running = False
+
+    dt = clock.tick()/10
 
     if cooldown:
         cooldown -= 1
@@ -112,10 +119,26 @@ while running:
             df[grid_select[0]][grid_select[1]]["spin"] = not df[grid_select[0]][grid_select[1]]["spin"]
 
     screen.fill("black")
-    for i, row in enumerate(df):
+    for i, row in enumerate(df):  # Draw lattice cells
         for j, cell in enumerate(row):
             pg.draw.rect(screen, cols[int(cell["spin"])], cell["rect"])
             pg.draw.circle(screen, "white", thermo_pos, 10)
+    for h in herbivores:  # Draw herbivores
+        h["a"] += np.random.random() * pi/8 - pi/16  # Random angle adjustment
+        step = np.array((cos(h["a"]), sin(h["a"]))) * h["v"] * dt  # Step size
+        h["p"] += step
+        if h["p"][0] < start_loc[0] or h["p"][0] > screen_size + start_loc[0]:
+            h["a"] = pi - h["a"] + int(h["a"] > 180) * 2*pi
+        if h["p"][1] < start_loc[1] or h["p"][1] > screen_size + start_loc[1]:
+            h["a"] = 2*pi - h["a"]
+        pg.draw.circle(screen, "white", h["p"], cell_size/4)  # Draw individual
+
+        if h["t"]:
+            h["t"] -= 1
+        else:
+            h["t"] = int(BITE_COOLDOWN * (1 + np.random.random()))
+            grid_pos = (h["p"] - start_loc) // (cell_size + gap_size)
+            df[int(grid_pos[0])][int(grid_pos[1])]["spin"] = True
     
     screen.blit(thermo_display, (0, 0))
     if display_total:
