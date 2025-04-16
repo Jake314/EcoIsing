@@ -7,7 +7,7 @@ class Population:
     START_LOC = (50, 0)  # Full grid offset
     COLOURS = ["black", "#8a0000", "#2596be"]  # Colours of cells
     GAP_SIZE = 0  # Space between cells
-    COOLDOWN_TIMER = 60  # Clicking cooldown
+    COOLDOWN_TIMER = 1000  # Clicking cooldown
     BITE_COOLDOWN = 1000  # How often herbivore can attack
     J = 1  # Coupling constant
     THERMO_OFFSET = 20
@@ -65,17 +65,36 @@ class Population:
                         self.CELL_SIZE
                     )})
     
-    def potential(self, row, col):
+    def grid_coords(self, coords):
+        """Converts from absolute coordinates to lattice coordinates"""
+        return (coords - self.START_LOC) // (self.CELL_SIZE + self.GAP_SIZE)
+
+    def set(self, coords, val=0, convert_to_grid=True):
+        """Sets the value of a cell, converting coordinates. Alternates value by default"""
+        if convert_to_grid:
+            coords = self.grid_coords(coords)
+        if val:
+            self.grid[int(coords[0])][int(coords[1])]["spin"] = val
+        else:
+            self.grid[int(coords[0])][int(coords[1])]["spin"] *= -1
+    
+    def get(self, coords, convert_to_grid=False):
+        """Gets the spin value for the cell at the given coordinates, converting if specified"""
+        if convert_to_grid:
+            coords = self.grid_coords(coords)
+        return self.grid[int(coords[0])][int(coords[1])]["spin"]
+    
+    def potential(self, coords):
         """Calculates the energy difference of a cell if its spin were reversed"""
-        spin = self.grid[row][col]["spin"]
+        spin = self.get(coords)
 
         neighbours = []
-        for i in [row - 1, row + 1]:
+        for i in [coords[0] - 1, coords[0] + 1]:
             if i >= 0 and i < self.GRID_SIZE:
-                neighbours.append(self.grid[i][col]["spin"])
-        for j in [col - 1, col + 1]:
+                neighbours.append(self.get((i, coords[1])))
+        for j in [coords[1] - 1, coords[1] + 1]:
             if j >= 0 and j < self.GRID_SIZE:
-                neighbours.append(self.grid[row][j]["spin"])
+                neighbours.append(self.get((coords[0], j)))
         
         current = -self.J * sum([spin * n for n in neighbours])
         new = -self.J * sum([-spin * n for n in neighbours])
@@ -84,17 +103,15 @@ class Population:
     
     def flip(self):
         """Pick a random cell, do the energy calculation and flip accordingly"""
-        randx = np.random.randint(self.GRID_SIZE)
-        randy = np.random.randint(self.GRID_SIZE)
-
-        dE = self.potential(randy, randx)
+        cell = np.random.randint(0, self.GRID_SIZE, 2)
+        dE = self.potential(cell)
         if dE < 0:
-            self.grid[randy][randx]["spin"] *= -1
+            self.set(cell, convert_to_grid=False)
         else:
-            is_edge = (randx in (0, self.GRID_SIZE-1), randy in (0, self.GRID_SIZE-1))
+            is_edge = (cell[0] in (0, self.GRID_SIZE-1), cell[1] in (0, self.GRID_SIZE-1))
             # Random flip impossible if E=8J for middle, 6J for edge, 4J for corner (max difference)
             if dE < (8 - 2 * sum(is_edge)) * self.J and np.random.random() < exp(-(1/self.temp) * dE):
-                self.grid[randy][randx]["spin"] *= -1
+                self.set(cell, convert_to_grid=False)
     
     def herbivory(self, time_step):
         for h in self.herbivores:
@@ -110,8 +127,7 @@ class Population:
                 h["t"] -= 1
             else:  # If bite cooldown is 0
                 h["t"] = int(self.BITE_COOLDOWN * (1 + np.random.random()))  # Ranges from 1x to 2x base cooldown
-                grid_pos = (h["p"] - self.START_LOC) // (self.CELL_SIZE + self.GAP_SIZE)
-                self.grid[int(grid_pos[0])][int(grid_pos[1])]["spin"] = 1
+                self.set(h["p"], 1)
 
     def click(self, mouse_pos):
         if mouse_pos[0] < self.START_LOC[0]:  # User is clicking on thermostat
@@ -120,8 +136,7 @@ class Population:
                 self.set_temp()
         elif not self.cooldown:  # User is clicking on lattice
             self.cooldown = self.COOLDOWN_TIMER
-            grid_select = (np.array(mouse_pos) - self.START_LOC) // (self.CELL_SIZE + self.GAP_SIZE)
-            self.grid[grid_select[0]][grid_select[1]]["spin"] *= -1
+            self.set(mouse_pos)
     
     def draw_grid(self):
         """Draws lattice of cells"""
@@ -160,7 +175,7 @@ while running:
     if sim.cooldown:
         sim.cooldown -= 1
     if pg.mouse.get_pressed()[0]:
-        sim.click(pg.mouse.get_pos())
+        sim.click(np.array(pg.mouse.get_pos()))
 
     screen.fill("black")
     sim.draw_grid()
