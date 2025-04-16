@@ -32,37 +32,27 @@ def local_energy(grid, row, col):
 
     return new - current
 
-display_local = False
-display_total = False
+# All the parameters of the simulation
+cols = ["#2596be", "#8a0000"]  # Colours of cells
+df = []  # Empty lattice (to be filled)
 start_loc = (50, 0)  # Full grid offset
 grid_size = 20  # Number of cells on each side of grid
 cell_size = 600//grid_size  # Side length of cell
 gap_size = 0  # Space between cells
+screen_size = grid_size * (cell_size + gap_size)  # Size of lattice
 MIX_START = False  # Randomized start or not
 COOLDOWN_TIMER = 60  # Clicking cooldown
-BITE_COOLDOWN = 1000
+BITE_COOLDOWN = 1000  # How often herbivore can attack
 J = 1  # Coupling constant
-
-pg.init()
-text = pg.font.SysFont("Comic Sans MS", 30)
-screen_size = grid_size * (cell_size + gap_size)
-
+herbivores = [
+    {"p": np.array((screen_size/2 + start_loc[0], screen_size/2 + start_loc[1])), "v": 1, "a": 0, "t": BITE_COOLDOWN}
+    ]
 thermo_offset = 20
 thermo_range = (0, 5)
 temp = 1.
 thermo_pos = [25, thermo_offset + (temp/(thermo_range[1] - thermo_range[0])) * (screen_size - 2 * thermo_offset)]
 
-herbivores = [
-    {"p": np.array((screen_size/2 + start_loc[0], screen_size/2 + start_loc[1])), "v": 1, "a": 0, "t": BITE_COOLDOWN}
-    ]
-
-screen = pg.display.set_mode((screen_size + start_loc[0], screen_size + start_loc[1]))
-pg.display.set_caption("Ising Simulation")
-clock = pg.time.Clock()
-running = True
-
-cols = ["#2596be", "#8a0000"]
-df = []
+# Filling the grid
 for i in range(grid_size):
     df.append([])
     for j in range(grid_size):
@@ -75,6 +65,14 @@ for i in range(grid_size):
                 cell_size
             )})
 
+# Pygame initialization
+pg.init()
+text = pg.font.SysFont("moderno20", 30)
+screen = pg.display.set_mode((screen_size + start_loc[0], screen_size + start_loc[1]))
+pg.display.set_caption("Ising Simulation")
+clock = pg.time.Clock()
+running = True
+
 cooldown = 0
 
 while running:
@@ -82,24 +80,13 @@ while running:
         if event.type == pg.QUIT:
             running = False
 
-    dt = clock.tick()/10
+    dt = clock.tick()/10  # Dynamic time interval for constant herbivore speeds
 
-    if cooldown:
-        cooldown -= 1
-
-    thermo_display = text.render(str(round(temp, 1)), False, "white")
-
-    select = pg.mouse.get_pos()
-    mouse_display = text.render(str(select), False, (0, 0, 0))
-    if display_total:
-        energy_display = text.render(str(get_sum(df)), False, (0, 0, 0))
-
+    # Pick a random cell, do the energy calculation and flip accordingly
     randx = np.random.randint(grid_size)
     randy = np.random.randint(grid_size)
 
     energy_diff = local_energy(df, randy, randx)
-    if display_local:
-        local_display = text.render(str(local_energy(df, select[0], select[1])), False, (0, 0, 0))
     if energy_diff < 0:
         df[randy][randx]["spin"] = not df[randy][randx]["spin"]
     else:
@@ -108,7 +95,11 @@ while running:
         if energy_diff < (8 - 2 * sum(is_edge)) * J and np.random.random() < exp(-(1/temp) * energy_diff):
             df[randy][randx]["spin"] = not df[randy][randx]["spin"]
 
+    # Handling clicking
+    if cooldown:
+        cooldown -= 1
     if pg.mouse.get_pressed()[0]:
+        select = pg.mouse.get_pos()
         if select[0] < start_loc[0]:
             if select[1] > thermo_offset and select[1] < screen_size - thermo_offset:
                 thermo_pos[1] = select[1]
@@ -118,6 +109,7 @@ while running:
             cooldown = COOLDOWN_TIMER
             df[grid_select[0]][grid_select[1]]["spin"] = not df[grid_select[0]][grid_select[1]]["spin"]
 
+    # Blank the screen, draw the grid, do the herbivore calculations, draw herbivore(s)
     screen.fill("black")
     for i, row in enumerate(df):  # Draw lattice cells
         for j, cell in enumerate(row):
@@ -140,11 +132,9 @@ while running:
             grid_pos = (h["p"] - start_loc) // (cell_size + gap_size)
             df[int(grid_pos[0])][int(grid_pos[1])]["spin"] = True
     
+    # Draw text display(s)
+    thermo_display = text.render(str(round(temp, 1)), False, "white")
     screen.blit(thermo_display, (0, 0))
-    if display_total:
-        screen.blit(energy_display, (50, 0))
-    if display_local:
-        screen.blit(local_display, (screen_size - 50, 0))
 
     pg.display.flip()
 
