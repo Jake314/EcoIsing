@@ -3,78 +3,151 @@ import numpy as np
 from math import exp, sin, cos, pi
 
 
-# Gets the total energy across the entire grid
-def get_sum(grid):
-    total = 0
-    for i, row in enumerate(grid):
-        for j, cell in enumerate(row):
-            if i + 1 < len(grid):  # Vertical coupling
-                total += (-1, 1)[cell["spin"]] * (-1, 1)[grid[i + 1][j]["spin"]]
-            if j + 1 < len(grid[0]):  # Horizontal coupling
-                total += (-1, 1)[cell["spin"]] * (-1, 1)[row[j + 1]["spin"]]
-    return total
+class Population:
+    START_LOC = (50, 0)  # Full grid offset
+    COLOURS = ["black", "#8a0000", "#2596be"]  # Colours of cells
+    GAP_SIZE = 0  # Space between cells
+    COOLDOWN_TIMER = 60  # Clicking cooldown
+    BITE_COOLDOWN = 1000  # How often herbivore can attack
+    J = 1  # Coupling constant
+    THERMO_OFFSET = 20
+    THERMO_RANGE = (0, 5)
 
+    def __init__(self, size: int, randomize: bool, start_temp=3.):
+        """Initialization: first group of variables are chosen, second depends on first, third is not chosen"""
+        self.GRID_SIZE = size  # Number of cells on each side of grid
+        self.temp = start_temp  # 'Temperature' of the entire system
 
-# Gets the energy at a specific cell with regard to its neighbours
-def local_energy(grid, row, col):
-    spin = (-1, 1)[int(grid[row][col]["spin"])]
+        self.CELL_SIZE = 600//self.GRID_SIZE  # Side length of cell
+        self.SCREEN_SIZE = self.GRID_SIZE * (self.CELL_SIZE + self.GAP_SIZE)  # Size of lattice
+        self.MIX_START = randomize  # Randomized start or not
 
-    neighbours = []
-    for i in [row - 1, row + 1]:
-        if i >= 0 and i < grid_size:
-            neighbours.append((-1, 1)[int(grid[i][col]["spin"])])
-    for j in [col - 1, col + 1]:
-        if j >= 0 and j < grid_size:
-            neighbours.append((-1, 1)[int(grid[row][j]["spin"])])
+        self.herbivores = [
+            {"p": np.array((self.SCREEN_SIZE/2 + self.START_LOC[0], self.SCREEN_SIZE/2 + self.START_LOC[1])), "v": 1, "a": 0, "t": self.BITE_COOLDOWN}
+            ]
+        self.set_thermo()
+        self.init_grid()
+        self.cooldown = 0
     
-    current = -J * sum([spin * n for n in neighbours])
-    new = -J * sum([-spin * n for n in neighbours])
+    def set_thermo(self):
+        """Sets the position of the thermostat based on current temp"""
+        self.thermo_pos = [
+            self.START_LOC[0]//2,
+            self.THERMO_OFFSET + (self.temp/(self.THERMO_RANGE[1] - self.THERMO_RANGE[0])) * (self.SCREEN_SIZE - 2*self.THERMO_OFFSET)]
+    
+    def set_temp(self):
+        """Sets the temperature based on the current thermostat pos"""
+        self.temp = self.THERMO_RANGE[0] + self.THERMO_RANGE[1] * (self.thermo_pos[1] - self.THERMO_OFFSET)/(self.SCREEN_SIZE - 2 * self.THERMO_OFFSET)
+    
+    def get_total(self):
+        """Gets total energy across the entire lattice"""
+        total = 0
+        for i, row in enumerate(self.grid):
+            for j, cell in enumerate(row):
+                if i + 1 < self.grid_size:  # Vertical coupling
+                    total += (-1, 1)[cell["spin"]] * (-1, 1)[self.grid[i + 1][j]["spin"]]
+                if j + 1 < self.grid_size:  # Horizontal coupling
+                    total += (-1, 1)[cell["spin"]] * (-1, 1)[row[j + 1]["spin"]]
+        return total
 
-    return new - current
+    def init_grid(self):
+        """Builds the starting lattice"""
+        self.grid = []
+        for i in range(self.GRID_SIZE):
+            self.grid.append([])
+            for j in range(self.GRID_SIZE):
+                self.grid[i].append({
+                    "spin": (-1, 1)[bool(np.random.randint(2))] if self.MIX_START else -1,
+                    "rect": pg.Rect(
+                        self.START_LOC[0] + (self.CELL_SIZE + self.GAP_SIZE)*i,
+                        self.START_LOC[1] + (self.CELL_SIZE + self.GAP_SIZE)*j,
+                        self.CELL_SIZE,
+                        self.CELL_SIZE
+                    )})
+    
+    def potential(self, row, col):
+        """Calculates the energy difference of a cell if its spin were reversed"""
+        spin = self.grid[row][col]["spin"]
 
-# All the parameters of the simulation
-cols = ["#2596be", "#8a0000"]  # Colours of cells
-df = []  # Empty lattice (to be filled)
-start_loc = (50, 0)  # Full grid offset
-grid_size = 20  # Number of cells on each side of grid
-cell_size = 600//grid_size  # Side length of cell
-gap_size = 0  # Space between cells
-screen_size = grid_size * (cell_size + gap_size)  # Size of lattice
-MIX_START = False  # Randomized start or not
-COOLDOWN_TIMER = 60  # Clicking cooldown
-BITE_COOLDOWN = 1000  # How often herbivore can attack
-J = 1  # Coupling constant
-herbivores = [
-    {"p": np.array((screen_size/2 + start_loc[0], screen_size/2 + start_loc[1])), "v": 1, "a": 0, "t": BITE_COOLDOWN}
-    ]
-thermo_offset = 20
-thermo_range = (0, 5)
-temp = 1.
-thermo_pos = [25, thermo_offset + (temp/(thermo_range[1] - thermo_range[0])) * (screen_size - 2 * thermo_offset)]
+        neighbours = []
+        for i in [row - 1, row + 1]:
+            if i >= 0 and i < self.GRID_SIZE:
+                neighbours.append(self.grid[i][col]["spin"])
+        for j in [col - 1, col + 1]:
+            if j >= 0 and j < self.GRID_SIZE:
+                neighbours.append(self.grid[row][j]["spin"])
+        
+        current = -self.J * sum([spin * n for n in neighbours])
+        new = -self.J * sum([-spin * n for n in neighbours])
 
-# Filling the grid
-for i in range(grid_size):
-    df.append([])
-    for j in range(grid_size):
-        df[i].append({
-            "spin": bool(np.random.randint(2)) if MIX_START else False,
-            "rect": pg.Rect(
-                start_loc[0] + (cell_size + gap_size)*i,
-                start_loc[1] + (cell_size + gap_size)*j,
-                cell_size,
-                cell_size
-            )})
+        return new - current
+    
+    def flip(self):
+        """Pick a random cell, do the energy calculation and flip accordingly"""
+        randx = np.random.randint(self.GRID_SIZE)
+        randy = np.random.randint(self.GRID_SIZE)
+
+        dE = self.potential(randy, randx)
+        if dE < 0:
+            self.grid[randy][randx]["spin"] *= -1
+        else:
+            is_edge = (randx in (0, self.GRID_SIZE-1), randy in (0, self.GRID_SIZE-1))
+            # Random flip impossible if E=8J for middle, 6J for edge, 4J for corner (max difference)
+            if dE < (8 - 2 * sum(is_edge)) * self.J and np.random.random() < exp(-(1/self.temp) * dE):
+                self.grid[randy][randx]["spin"] *= -1
+    
+    def herbivory(self, time_step):
+        for h in self.herbivores:
+            h["a"] += np.random.random() * pi/8 - pi/16  # Random angle adjustment
+            step = np.array((cos(h["a"]), sin(h["a"]))) * h["v"] * time_step  # Step size
+            h["p"] += step
+            if h["p"][0] < self.START_LOC[0] or h["p"][0] > self.SCREEN_SIZE + self.START_LOC[0]:
+                h["a"] = pi - h["a"] + int(h["a"] > 180) * 2*pi
+            if h["p"][1] < self.START_LOC[1] or h["p"][1] > self.SCREEN_SIZE + self.START_LOC[1]:
+                h["a"] = 2*pi - h["a"]
+
+            if h["t"]:
+                h["t"] -= 1
+            else:  # If bite cooldown is 0
+                h["t"] = int(self.BITE_COOLDOWN * (1 + np.random.random()))  # Ranges from 1x to 2x base cooldown
+                grid_pos = (h["p"] - self.START_LOC) // (self.CELL_SIZE + self.GAP_SIZE)
+                self.grid[int(grid_pos[0])][int(grid_pos[1])]["spin"] = 1
+
+    def click(self, mouse_pos):
+        if mouse_pos[0] < self.START_LOC[0]:  # User is clicking on thermostat
+            if mouse_pos[1] > self.THERMO_OFFSET and mouse_pos[1] < self.SCREEN_SIZE - self.THERMO_OFFSET:
+                self.thermo_pos[1] = mouse_pos[1]
+                self.set_temp()
+        elif not self.cooldown:  # User is clicking on lattice
+            self.cooldown = self.COOLDOWN_TIMER
+            grid_select = (np.array(mouse_pos) - self.START_LOC) // (self.CELL_SIZE + self.GAP_SIZE)
+            self.grid[grid_select[0]][grid_select[1]]["spin"] *= -1
+    
+    def draw_grid(self):
+        """Draws lattice of cells"""
+        for i, row in enumerate(self.grid):  # Draw lattice cells
+            for j, cell in enumerate(row):
+                pg.draw.rect(screen, self.COLOURS[cell["spin"]], cell["rect"])
+    
+    def draw_options(self):
+        """Draws thermostat, and other future options if added"""
+        pg.draw.circle(screen, "white", self.thermo_pos, 10)
+    
+    def draw_herbivores(self):
+        for h in self.herbivores:
+            pg.draw.circle(screen, "white", h["p"], self.CELL_SIZE/4)
+
+sim = Population(size=20, randomize=False)
 
 # Pygame initialization
 pg.init()
-text = pg.font.SysFont("moderno20", 30)
-screen = pg.display.set_mode((screen_size + start_loc[0], screen_size + start_loc[1]))
 pg.display.set_caption("Ising Simulation")
+text = pg.font.SysFont("moderno20", 30)
 clock = pg.time.Clock()
 running = True
+screen = pg.display.set_mode((sim.SCREEN_SIZE + sim.START_LOC[0], sim.SCREEN_SIZE + sim.START_LOC[1]))
 
-cooldown = 0
-
+# Game loop
 while running:
     for event in pg.event.get():
         if event.type == pg.QUIT:
@@ -82,58 +155,21 @@ while running:
 
     dt = clock.tick()/10  # Dynamic time interval for constant herbivore speeds
 
-    # Pick a random cell, do the energy calculation and flip accordingly
-    randx = np.random.randint(grid_size)
-    randy = np.random.randint(grid_size)
+    sim.flip()
 
-    energy_diff = local_energy(df, randy, randx)
-    if energy_diff < 0:
-        df[randy][randx]["spin"] = not df[randy][randx]["spin"]
-    else:
-        is_edge = (randx in (0, grid_size-1), randy in (0, grid_size-1))
-        # Random flip impossible if E=8J for middle, 6J for edge, 4J for corner (max difference)
-        if energy_diff < (8 - 2 * sum(is_edge)) * J and np.random.random() < exp(-(1/temp) * energy_diff):
-            df[randy][randx]["spin"] = not df[randy][randx]["spin"]
-
-    # Handling clicking
-    if cooldown:
-        cooldown -= 1
+    if sim.cooldown:
+        sim.cooldown -= 1
     if pg.mouse.get_pressed()[0]:
-        select = pg.mouse.get_pos()
-        if select[0] < start_loc[0]:
-            if select[1] > thermo_offset and select[1] < screen_size - thermo_offset:
-                thermo_pos[1] = select[1]
-                temp = thermo_range[0] + thermo_range[1] * (thermo_pos[1] - thermo_offset)/(screen_size - 2 * thermo_offset)
-        elif not cooldown:
-            grid_select = (np.array(select) - start_loc) // (cell_size + gap_size)
-            cooldown = COOLDOWN_TIMER
-            df[grid_select[0]][grid_select[1]]["spin"] = not df[grid_select[0]][grid_select[1]]["spin"]
+        sim.click(pg.mouse.get_pos())
 
-    # Blank the screen, draw the grid, do the herbivore calculations, draw herbivore(s)
     screen.fill("black")
-    for i, row in enumerate(df):  # Draw lattice cells
-        for j, cell in enumerate(row):
-            pg.draw.rect(screen, cols[int(cell["spin"])], cell["rect"])
-            pg.draw.circle(screen, "white", thermo_pos, 10)
-    for h in herbivores:  # Draw herbivores
-        h["a"] += np.random.random() * pi/8 - pi/16  # Random angle adjustment
-        step = np.array((cos(h["a"]), sin(h["a"]))) * h["v"] * dt  # Step size
-        h["p"] += step
-        if h["p"][0] < start_loc[0] or h["p"][0] > screen_size + start_loc[0]:
-            h["a"] = pi - h["a"] + int(h["a"] > 180) * 2*pi
-        if h["p"][1] < start_loc[1] or h["p"][1] > screen_size + start_loc[1]:
-            h["a"] = 2*pi - h["a"]
-        pg.draw.circle(screen, "white", h["p"], cell_size/4)  # Draw individual
-
-        if h["t"]:
-            h["t"] -= 1
-        else:
-            h["t"] = int(BITE_COOLDOWN * (1 + np.random.random()))
-            grid_pos = (h["p"] - start_loc) // (cell_size + gap_size)
-            df[int(grid_pos[0])][int(grid_pos[1])]["spin"] = True
+    sim.draw_grid()
+    sim.draw_options()
+    sim.herbivory(dt)
+    sim.draw_herbivores()
     
     # Draw text display(s)
-    thermo_display = text.render(str(round(temp, 1)), False, "white")
+    thermo_display = text.render(str(round(sim.temp, 1)), False, "white")
     screen.blit(thermo_display, (0, 0))
 
     pg.display.flip()
