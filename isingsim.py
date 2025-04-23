@@ -1,17 +1,18 @@
 import pygame as pg
 import numpy as np
-from math import exp, sin, cos, pi
+from math import exp, sin, cos, atan2, pi, degrees
 
 
 class Population:
-    START_LOC = (50, 0)  # Full grid offset
+    START_LOC = np.array((50, 0))  # Full grid offset
     COLOURS = ["black", "#8a0000", "#2596be"]  # Colours of cells
     GAP_SIZE = 0  # Space between cells
-    COOLDOWN_TIMER = 1000  # Clicking cooldown
+    COOLDOWN_TIMER = 500  # Manual flipping cooldown
     BITE_COOLDOWN = 1000  # How often herbivore can attack
     J = 1  # Coupling constant
     THERMO_OFFSET = 20
     THERMO_RANGE = (0, 5)
+    NUM_OF_HERBIVORES = 1
 
     def __init__(self, size: int, randomize: bool, start_temp=3.):
         """Initialization: first group of variables are chosen, second depends on first, third is not chosen"""
@@ -22,12 +23,18 @@ class Population:
         self.SCREEN_SIZE = self.GRID_SIZE * (self.CELL_SIZE + self.GAP_SIZE)  # Size of lattice
         self.MIX_START = randomize  # Randomized start or not
 
-        self.herbivores = [
-            {"p": np.array((self.SCREEN_SIZE/2 + self.START_LOC[0], self.SCREEN_SIZE/2 + self.START_LOC[1])), "v": 1, "a": 0, "t": self.BITE_COOLDOWN}
-            ]
+        self.herbivores = []
+        for i in range(self.NUM_OF_HERBIVORES):
+            self.herbivores.append(
+                {"p": self.START_LOC + np.random.random(2) * ((self.SCREEN_SIZE,)*2),  # position
+                "v": .06,  # speed
+                "a": 0,  # angle
+                "t": self.BITE_COOLDOWN*(1 + np.random.random())}
+            )
         self.set_thermo()
         self.init_grid()
         self.cooldown = 0
+        self.info = None
     
     def set_thermo(self):
         """Sets the position of the thermostat based on current temp"""
@@ -59,15 +66,15 @@ class Population:
                 self.grid[i].append({
                     "spin": (-1, 1)[bool(np.random.randint(2))] if self.MIX_START else -1,
                     "rect": pg.Rect(
-                        self.START_LOC[0] + (self.CELL_SIZE + self.GAP_SIZE)*i,
-                        self.START_LOC[1] + (self.CELL_SIZE + self.GAP_SIZE)*j,
+                        self.START_LOC[0] + (self.CELL_SIZE + self.GAP_SIZE)*j,
+                        self.START_LOC[1] + (self.CELL_SIZE + self.GAP_SIZE)*i,
                         self.CELL_SIZE,
                         self.CELL_SIZE
                     )})
     
     def grid_coords(self, coords):
         """Converts from absolute coordinates to lattice coordinates"""
-        return (coords - self.START_LOC) // (self.CELL_SIZE + self.GAP_SIZE)
+        return ((coords - self.START_LOC) // (self.CELL_SIZE + self.GAP_SIZE))[[1,0]]
 
     def set(self, coords, val=0, convert_to_grid=True):
         """Sets the value of a cell, converting coordinates. Alternates value by default"""
@@ -116,14 +123,33 @@ class Population:
     def herbivory(self, time_step):
         for h in self.herbivores:
             h["a"] += np.random.random() * pi/8 - pi/16  # Random angle adjustment
+            h["a"] %= 360
             step = np.array((cos(h["a"]), sin(h["a"]))) * h["v"] * time_step  # Step size
             h["p"] += step
+            # Check if herbivore has moved out of bounds
             if h["p"][0] < self.START_LOC[0] or h["p"][0] > self.SCREEN_SIZE + self.START_LOC[0]:
+                h["p"] -= step
                 h["a"] = pi - h["a"] + int(h["a"] > 180) * 2*pi
             if h["p"][1] < self.START_LOC[1] or h["p"][1] > self.SCREEN_SIZE + self.START_LOC[1]:
+                h["p"] -= step
                 h["a"] = 2*pi - h["a"]
+            
+            angles = [i*pi/4 for i in range(8)]
+            # angles = [45*i for i in range(8)]
+            angles = np.array(angles)[[7, 6, 5, 0, 0, 4, 1, 2, 3]]
+            cell = self.grid_coords(h["p"])
+            surroundings = []
+            for r in (-1, 0, 1):
+                for c in (-1, 0, 1):
+                    if cell[0] + r in range(self.GRID_SIZE) and cell[1] + c in range(self.GRID_SIZE) \
+                        and not (r == 0 and c == 0) and self.get((cell[0]+r, cell[1]+c)) == 1:
+                        surroundings.append(angles[3*(r+1) + (c+1)])
+            A = atan2(sum([sin(a) for a in surroundings]), sum([cos(a) for a in surroundings]))
+            if A < 0:
+                A += 2*pi
+            self.set_info(round(degrees(A),2))
 
-            if h["t"]:
+            if h["t"] > 0:
                 h["t"] -= 1
             else:  # If bite cooldown is 0
                 h["t"] = int(self.BITE_COOLDOWN * (1 + np.random.random()))  # Ranges from 1x to 2x base cooldown
@@ -151,8 +177,12 @@ class Population:
     def draw_herbivores(self):
         for h in self.herbivores:
             pg.draw.circle(screen, "white", h["p"], self.CELL_SIZE/4)
+    
+    def set_info(self, val):
+        self.info = text.render(str(val), False, "white")
 
-sim = Population(size=20, randomize=False)
+sim = Population(size=10, randomize=False, start_temp=3)
+DEBUG = True
 
 # Pygame initialization
 pg.init()
@@ -168,7 +198,7 @@ while running:
         if event.type == pg.QUIT:
             running = False
 
-    dt = clock.tick()/10  # Dynamic time interval for constant herbivore speeds
+    dt = clock.tick()  # Dynamic time interval for constant herbivore speeds
 
     sim.flip()
 
@@ -186,6 +216,8 @@ while running:
     # Draw text display(s)
     thermo_display = text.render(str(round(sim.temp, 1)), False, "white")
     screen.blit(thermo_display, (0, 0))
+    if DEBUG:
+        screen.blit(sim.info, sim.START_LOC)
 
     pg.display.flip()
 
