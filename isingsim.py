@@ -172,17 +172,17 @@ class Population:
 
             h["v"].rotate_ip(np.random.random()*20 - 10)  # Random velocity rotation
 
-            # Defense-active cells nudge velocity away
+            # Defense-active cells nudge velocity away (avoidance)
             surroundings = []
             for r in (-1, 0, 1):
-                for c in (-1, 0, 1):  # Looks in each 3x3 centred on herbivore
+                for c in (-1, 0, 1):  # Looks in 3x3 centred on herbivore
                     neighbour = h["p"] + self.GRID_VEC.elementwise()*(c, r)
-                    if neighbour[0] > 0 and neighbour[1] > 0 and neighbour[0] < self.SCREEN_SIZE + self.START_LOC[0] and neighbour[1] < self.SCREEN_SIZE + self.START_LOC[1]:
-                        if self.get(neighbour, convert_to_grid=True) == 1:
-                            surroundings.append(h["v"].length() * self.PUSH_FACTOR * pg.Vector2(-c,-r))
+                    if not (tuple(neighbour) == self.grid_clamp(neighbour) and self.get(neighbour, convert_to_grid=True) == -1):
+                        # If neighbour is in grid and deactive, skip. Otherwise, nudge (active or border)
+                        surroundings.append(h["v"].length() * self.PUSH_FACTOR * pg.Vector2(-c,-r))
             push = pg.Vector2()
             for vec in surroundings:
-                push += vec  # Total push is sum of all neighbours, so [0,2] will be stronger than [1] in the same direction
+                push += vec  # Total push is sum of all neighbours, so [0,2] will be stronger than [1] and in the same direction
             h["v"] += push
 
             # Move according to new adjusted velocity
@@ -232,7 +232,7 @@ class Population:
     
     def draw_options(self):
         """Draws thermostat, and other future options if added"""
-        pg.draw.circle(screen, "white", self.thermo_pos, self.START_LOC[0]//3)
+        pg.draw.circle(screen, "green", self.thermo_pos, self.START_LOC[0]//3)
     
     def draw_herbivores(self):
         for h in self.herbivores:
