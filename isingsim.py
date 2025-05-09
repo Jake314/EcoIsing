@@ -56,7 +56,8 @@ class Population:
         """Sets the position of the thermostat based on current temp"""
         self.thermo_pos = [
             self.START_LOC[0]//2,
-            self.THERMO_OFFSET + (self.temp/(self.THERMO_RANGE[1] - self.THERMO_RANGE[0])) * (self.SCREEN_SIZE - 2*self.THERMO_OFFSET)]
+            self.THERMO_OFFSET + (self.temp/(self.THERMO_RANGE[1] - self.THERMO_RANGE[0])) * (self.SCREEN_SIZE - 2*self.THERMO_OFFSET)
+            ]
         self.thermo_display = text.render(str(round(self.temp, 1)), False, "white")
     
     def set_temp(self):
@@ -311,33 +312,33 @@ def run(sim, debug_mode=False, iteration=""):
             running = False
 
 # All-default population (for reference) -----=====-----
-# run(Population(
-#     size=10,
-#     randomize=False,
-#     NUM_OF_HERBIVORES=10,
-#     HERBIVORE_SPEED=1,
-#     BITE_COOLDOWN=1000,
-#     start_temp=3.,
-#     GAP_SIZE=0,
-#     PUSH_FACTOR=0.01,
-#     TURN_FACTOR=10,
-#     MAX_ACTIVATION=50,
-#     ISING_ON=True),
-#     debug_mode=False
-#     )
+run(Population(
+    size=10,
+    randomize=False,
+    NUM_OF_HERBIVORES=10,
+    HERBIVORE_SPEED=1,
+    BITE_COOLDOWN=1000,
+    start_temp=3.,
+    GAP_SIZE=0,
+    PUSH_FACTOR=0.01,
+    TURN_FACTOR=10,
+    MAX_ACTIVATION=50,
+    ISING_ON=True),
+    debug_mode=False
+    )
 
 # Multi-run data generation -----=====-----
-data = []
-iterations = 1
-temp_range = np.arange(1, 1.25, 0.25)
-for i in range(iterations):
-    for j, t in enumerate(temp_range):
-        sim = Population(start_temp=t, HERBIVORE_SPEED=1, size=20, NUM_OF_HERBIVORES=40)
-        run(sim, iteration=f"{i * len(temp_range) + j + 1}/{len(temp_range)*iterations}")
-        data.append(sim.record)
-data.append(sim.record)
-data = pd.DataFrame(data)
-data.to_csv("results/temp.csv", index=False)
+# data = []
+# iterations = 5
+# temp_range = np.arange(1.25, 3.5, 0.25)
+# for i in range(iterations):
+#     for j, t in enumerate(temp_range):
+#         sim = Population(start_temp=t, HERBIVORE_SPEED=1, size=10, NUM_OF_HERBIVORES=10)
+#         run(sim, iteration=f"{i * len(temp_range) + j + 1}/{len(temp_range)*iterations}")
+#         data.append(sim.record)
+# data.append(sim.record)
+# data = pd.DataFrame(data)
+# data.to_csv("results/temp.csv", index=False)
 
 # Large-field example -----=====-----
 # run(Population(size=50, HERBIVORE_SPEED=1, NUM_OF_HERBIVORES=50, PUSH_FACTOR=0.03))
