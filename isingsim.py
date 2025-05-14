@@ -20,7 +20,7 @@ class Population:
         self.temp = start_temp  # 'Temperature' of the entire system (reactivity)
         self.NUM_OF_HERBIVORES = NUM_OF_HERBIVORES
         self.GAP_SIZE = GAP_SIZE
-        self.HERBIVORE_SPEED = HERBIVORE_SPEED * 0.6 / size
+        self.HERBIVORE_SPEED = HERBIVORE_SPEED * 6 / size
         self.BITE_COOLDOWN = BITE_COOLDOWN  # How often herbivore can attack (random from 1x to 2x)
         self.PUSH_FACTOR = PUSH_FACTOR  # Percent of the herbivore's velocity the active cells push the herbivore away
         self.TURN_FACTOR = TURN_FACTOR  # Max random turn in degrees
@@ -179,9 +179,8 @@ class Population:
     
     def herbivory(self, time_step):
         """Carries out a single step in the herbivory process: change direction, move, attack"""
-        for h in self.herbivores:
-            if not h["state"]:
-                continue
+        h = self.herbivores[np.random.randint(len(self.herbivores))]
+        if h["state"]:  # If herbivore is alive
 
             h["v"].rotate_ip(np.random.random()*(2*self.TURN_FACTOR) - self.TURN_FACTOR)  # Random velocity rotation
 
@@ -341,7 +340,7 @@ run(Population(
 # data.to_csv("results/temp.csv", index=False)
 
 # Large-field example -----=====-----
-# run(Population(size=50, HERBIVORE_SPEED=1, NUM_OF_HERBIVORES=50, PUSH_FACTOR=0.03))
+# run(Population(size=20, HERBIVORE_SPEED=1, NUM_OF_HERBIVORES=20, PUSH_FACTOR=0.03, BITE_COOLDOWN=2000))
 
 # Avoidance example -----=====-----
 # run(Population(HERBIVORE_SPEED=1, NUM_OF_HERBIVORES=1, TURN_FACTOR=0, ISING_ON=False, PUSH_FACTOR=.01))
