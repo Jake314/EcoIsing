@@ -20,7 +20,7 @@ class Population:
         self.temp = start_temp  # 'Temperature' of the entire system (reactivity)
         self.NUM_OF_HERBIVORES = NUM_OF_HERBIVORES
         self.GAP_SIZE = GAP_SIZE
-        self.HERBIVORE_SPEED = HERBIVORE_SPEED * 6 / size
+        self.HERBIVORE_SPEED = HERBIVORE_SPEED * 0.6 / size
         self.BITE_COOLDOWN = BITE_COOLDOWN  # How often herbivore can attack (random from 1x to 2x)
         self.PUSH_FACTOR = PUSH_FACTOR  # Percent of the herbivore's velocity the active cells push the herbivore away
         self.TURN_FACTOR = TURN_FACTOR  # Max random turn in degrees
@@ -179,46 +179,47 @@ class Population:
     
     def herbivory(self, time_step):
         """Carries out a single step in the herbivory process: change direction, move, attack"""
-        h = self.herbivores[np.random.randint(len(self.herbivores))]
-        if h["state"]:  # If herbivore is alive
+        # h = self.herbivores[np.random.randint(len(self.herbivores))]
+        for h in self.herbivores:
+            if h["state"]:  # If herbivore is alive
 
-            h["v"].rotate_ip(np.random.random()*(2*self.TURN_FACTOR) - self.TURN_FACTOR)  # Random velocity rotation
+                h["v"].rotate_ip(np.random.random()*(2*self.TURN_FACTOR) - self.TURN_FACTOR)  # Random velocity rotation
 
-            # Defense-active cells nudge velocity away (avoidance)
-            surroundings = []
-            for r in (-1, 0, 1):
-                for c in (-1, 0, 1):  # Looks in 3x3 centred on herbivore
-                    neighbour = h["p"] + self.GRID_VEC.elementwise()*(c, r)
-                    if not (tuple(neighbour) == self.screen_clamp(neighbour) and self.get(neighbour, convert_to_grid=True) == -1):
-                        # If neighbour is in grid and deactive, skip. Otherwise, nudge (active or border)
-                        surroundings.append(self.HERBIVORE_SPEED * self.PUSH_FACTOR * pg.Vector2(-c,-r))
-            push = pg.Vector2()
-            for vec in surroundings:
-                push += vec  # Total push is sum of all neighbours, so [0,2] will be stronger than [1] and in the same direction
-            h["v"] += push
+                # Defense-active cells nudge velocity away (avoidance)
+                surroundings = []
+                for r in (-1, 0, 1):
+                    for c in (-1, 0, 1):  # Looks in 3x3 centred on herbivore
+                        neighbour = h["p"] + self.GRID_VEC.elementwise()*(c, r)
+                        if not (tuple(neighbour) == self.screen_clamp(neighbour) and self.get(neighbour, convert_to_grid=True) == -1):
+                            # If neighbour is in grid and deactive, skip. Otherwise, nudge (active or border)
+                            surroundings.append(self.HERBIVORE_SPEED * self.PUSH_FACTOR * pg.Vector2(-c,-r))
+                push = pg.Vector2()
+                for vec in surroundings:
+                    push += vec  # Total push is sum of all neighbours, so [0,2] will be stronger than [1] and in the same direction
+                h["v"] += push
 
-            # Move according to new adjusted velocity
-            step = np.array(h["v"]) * time_step  # Time step normalizes movement according to framerate
-            h["p"] += step
-            h["p"] = np.array(self.screen_clamp(h["p"]), dtype="float64")  # Out of bounds check
+                # Move according to new adjusted velocity
+                step = np.array(h["v"]) * time_step  # Time step normalizes movement according to framerate
+                h["p"] += step
+                h["p"] = np.array(self.screen_clamp(h["p"]), dtype="float64")  # Out of bounds check
 
-            try:
-                h["v"].scale_to_length(self.HERBIVORE_SPEED)  # Reset velocity's magnitude
-            except ValueError:
-                h["v"] = pg.Vector2([round(h["v"].x, 2), round(h["v"].y, 2)])
+                try:
+                    h["v"].scale_to_length(self.HERBIVORE_SPEED)  # Reset velocity's magnitude
+                except ValueError:
+                    h["v"] = pg.Vector2([round(h["v"].x, 2), round(h["v"].y, 2)])
 
-            # Perform attack based on cooldown
-            if h["t"] > 0:
-                h["t"] -= 1
-            else:  # If bite cooldown is 0
-                h["t"] = int(self.BITE_COOLDOWN * (1 + np.random.random()))  # Ranges from 1x to 2x base cooldown
-                if self.get(h["p"], convert_to_grid=True) == 1:  # Attacking active cell
-                    if h["v"].magnitude_squared():
-                        h["v"].scale_to_length(0)
-                    h["state"] = 0
-                else:  # Attacking inactive cell
-                    self.set(h["p"], 1, convert_to_grid=True)
-                    self.record["undefended_attacks"] += 1
+                # Perform attack based on cooldown
+                if h["t"] > 0:
+                    h["t"] -= 1
+                else:  # If bite cooldown is 0
+                    h["t"] = int(self.BITE_COOLDOWN * (1 + np.random.random()))  # Ranges from 1x to 2x base cooldown
+                    if self.get(h["p"], convert_to_grid=True) == 1:  # Attacking active cell
+                        if h["v"].magnitude_squared():
+                            h["v"].scale_to_length(0)
+                        h["state"] = 0
+                    else:  # Attacking inactive cell
+                        self.set(h["p"], 1, convert_to_grid=True)
+                        self.record["undefended_attacks"] += 1
 
     def click(self, mouse_pos):
         """Adjusts thermostat or flips cell according to where user clicks"""
