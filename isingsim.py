@@ -14,7 +14,7 @@ class Population:
     THERMO_OFFSET = 20  # Thermometer distance from top and bottom
     THERMO_RANGE = (0, 5)  # Min an max temperatures
 
-    def __init__(self, size=10, randomize=False, NUM_OF_HERBIVORES=10, HERBIVORE_SPEED=1, BITE_COOLDOWN = 1000, start_temp=3., GAP_SIZE=0, PUSH_FACTOR=0.01, TURN_FACTOR=10, MAX_ACTIVATION=50, ISING_ON=True):
+    def __init__(self, size=10, randomize=False, NUM_OF_HERBIVORES=10, HERBIVORE_SPEED=1., BITE_COOLDOWN = 1000, start_temp=3., GAP_SIZE=0, PUSH_FACTOR=0.01, TURN_FACTOR=10., MAX_ACTIVATION=50, ISING_ON=True):
         """Initialization: first group of variables are chosen, second depends on first, third is not chosen"""
         self.GRID_SIZE = size  # Number of cells on each side of grid
         self.temp = start_temp  # 'Temperature' of the entire system (reactivity)
@@ -108,7 +108,7 @@ class Population:
         return (x, y)
 
     def set(self, coords, val=0, convert_to_grid=False):
-        """Sets the value of a cell, converting coordinates. Alternates value by default"""
+        """Sets the value of a cell, converting coordinates if specified. Flips value by default"""
         if convert_to_grid:
             coords = self.grid_coords(coords)
         if val:
@@ -126,11 +126,13 @@ class Population:
         return self.grid[int(coords[0])][int(coords[1])]["spin"]
     
     def get_activation(self, coords, convert_to_grid=False):
+        """Gets the activity counter for an individual, converting coordinates if specified"""
         if convert_to_grid:
             coords = self.grid_coords(coords)
         return self.grid[int(coords[0])][int(coords[1])]["time_active"]
     
     def set_activation(self, coords, val, convert_to_grid=False):
+        """Sets the activity counter of an individual, converting coordinates if specified"""
         if convert_to_grid:
             coords = self.grid_coords(coords)
         self.grid[int(coords[0])][int(coords[1])]["time_active"] = val
@@ -145,7 +147,7 @@ class Population:
             self.set_activation(coords, 0)
     
     def potential(self, coords):
-        """Calculates the energy difference of a cell if its spin were reversed"""
+        """Calculates the energy difference for a cell if its state were flipped"""
         spin = self.get(coords)
 
         neighbours = []
@@ -162,15 +164,15 @@ class Population:
         return new - current
     
     def flip(self):
-        """Pick a random cell, do the energy calculation and flip accordingly"""
+        """Picks a random cell, does the energy calculation and flips accordingly"""
         cell = np.random.randint(0, self.GRID_SIZE, 2)
         dE = self.potential(cell)
         if dE < 0:
             self.set(cell)
         else:
             is_edge = (cell[0] in (0, self.GRID_SIZE-1), cell[1] in (0, self.GRID_SIZE-1))
-            # Random flip impossible if E=8J for middle, 6J for edge, 4J for corner (max difference)
-            if dE < (8 - 2 * sum(is_edge)) * self.J and np.random.random() < exp(-(1/self.temp) * dE):
+            # Random flip made impossible if E=8J for middle, 6J for edge, 4J for corner (max difference)
+            if dE < (8 - 2 * sum(is_edge)) * self.J and np.random.random() < exp(-(dE/self.temp)):
                 self.set(cell)
         if self.get(cell) == 1:
             self.tick(cell)
@@ -179,6 +181,7 @@ class Population:
     
     def herbivory(self, time_step):
         """Carries out a single step in the herbivory process: change direction, move, attack"""
+        # Uncomment this and remove 'for' to process one herbivory each frame instead of all
         # h = self.herbivores[np.random.randint(len(self.herbivores))]
         for h in self.herbivores:
             if h["state"]:  # If herbivore is alive
@@ -260,10 +263,11 @@ class Population:
         """Sets info text (used for debugging)"""
         self.info = text.render(str(val), False, "white")
 
-def run(sim, debug_mode=False, iteration=""):
+def run(sim, debug_mode=False, iteration="", halt_condition="half_herbivores"):
+    """Simulation main"""
     global clock, running, screen, text, DEBUG
     DEBUG = debug_mode
-    # Pygame initialization
+    # Pygame initialization (graphics)
     pg.init()
     pg.display.set_caption(f"Ising Simulation {iteration}")
     clock = pg.time.Clock()
@@ -272,9 +276,10 @@ def run(sim, debug_mode=False, iteration=""):
     text = pg.font.SysFont("moderno20", sim.START_LOC[0])
     sim.set_thermo()  # This is not done in class initialization because it needs the pygame text object (and screen needs class info)
 
-    # Game loop
+    # Game (simulation) loop
     while running:
         for event in pg.event.get():
+            # Exits on closing 'X' click
             if event.type == pg.QUIT:
                 running = False
 
@@ -284,6 +289,7 @@ def run(sim, debug_mode=False, iteration=""):
             sim.flip()  # Ising process
         sim.herbivory(dt)  # Move/attack process
 
+        # Checks for clicks (and counts cooldown)
         if sim.click_cooldown:
             sim.click_cooldown -= 1
         button_clicks = pg.mouse.get_pressed()
@@ -304,44 +310,58 @@ def run(sim, debug_mode=False, iteration=""):
             if type(sim.info) == pg.surface.Surface:
                 screen.blit(sim.info, sim.START_LOC)
 
-        pg.display.flip()
+        pg.display.flip()  # Redraws screen
 
-        if sim.NUM_OF_HERBIVORES > 3 and sum([not h["state"] for h in sim.herbivores]) >= sim.NUM_OF_HERBIVORES//2:
-            sim.record["time"] = round(time.time() - sim.record["time"], 1)
-            sim.record["temp"] = sim.temp
-            running = False
+        match halt_condition:
+            case "half_herbivores":
+                if sim.NUM_OF_HERBIVORES > 3 and sum([not h["state"] for h in sim.herbivores]) >= sim.NUM_OF_HERBIVORES//2:
+                    sim.record["time"] = round(time.time() - sim.record["time"], 1)
+                    sim.record["temp"] = sim.temp
+                    running = False
+            
+            case "time_limit":
+                if time.time() - sim.record["time"] >= 40:
+                    running = False
 
-# All-default population (for reference) -----=====-----
-run(Population(
-    size=10,
-    randomize=False,
-    NUM_OF_HERBIVORES=10,
-    HERBIVORE_SPEED=1,
-    BITE_COOLDOWN=1000,
-    start_temp=3.,
-    GAP_SIZE=0,
-    PUSH_FACTOR=0.01,
-    TURN_FACTOR=10,
-    MAX_ACTIVATION=50,
-    ISING_ON=True),
-    debug_mode=False
-    )
 
-# Multi-run data generation -----=====-----
+"""All-default population (for reference) -----=====-----"""
+run(Population())  # This is exactly the same as the defaults written below.
+
+# run(Population(
+#     size=10,  # 10
+#     randomize=False,  # False
+#     NUM_OF_HERBIVORES=10,  # 10
+#     HERBIVORE_SPEED=1,  # 1
+#     BITE_COOLDOWN=1000,  # 1000
+#     start_temp=3.,  # 3
+#     GAP_SIZE=0,  # 0
+#     PUSH_FACTOR=0.01,  # 0.01
+#     TURN_FACTOR=10,  # 10
+#     MAX_ACTIVATION=50,  # 50
+#     ISING_ON=True),  # True
+#     debug_mode=False,  # False
+#     halt_condition="half_herbivores"  # half_herbivores
+#     )
+
+"""Multi-run data generation -----=====-----"""
+# Example here is for responsiveness ranging from 1.25 to 3.5 at intervals of 0.25, done 5 times for each value
+# Here, herbivory is set low (half speed, double bite cooldown). The output is named accordingly.
+
 # data = []
 # iterations = 5
 # temp_range = np.arange(1.25, 3.5, 0.25)
 # for i in range(iterations):
 #     for j, t in enumerate(temp_range):
-#         sim = Population(start_temp=t, HERBIVORE_SPEED=1, size=10, NUM_OF_HERBIVORES=10)
-#         run(sim, iteration=f"{i * len(temp_range) + j + 1}/{len(temp_range)*iterations}")
+#         sim = Population(start_temp=t, HERBIVORE_SPEED=0.5, BITE_COOLDOWN=2000)
+#         run(sim, iteration=f"{i * len(temp_range) + j + 1}/{len(temp_range)*iterations}", halt_condition="time_limit")
 #         data.append(sim.record)
 # data.append(sim.record)
 # data = pd.DataFrame(data)
-# data.to_csv("results/temp.csv", index=False)
+# data.to_csv("results/5x125-325_timelimit_lowH.csv", index=False)
 
-# Large-field example -----=====-----
+"""Large-field example -----=====-----"""
 # run(Population(size=20, HERBIVORE_SPEED=1, NUM_OF_HERBIVORES=20, PUSH_FACTOR=0.03, BITE_COOLDOWN=2000))
 
-# Avoidance example -----=====-----
-# run(Population(HERBIVORE_SPEED=1, NUM_OF_HERBIVORES=1, TURN_FACTOR=0, ISING_ON=False, PUSH_FACTOR=.01))
+"""Avoidance example -----=====-----"""
+# Click on cells near the herbivore to observe the avoidance mechanism clearly
+# run(Population(HERBIVORE_SPEED=1, NUM_OF_HERBIVORES=1, TURN_FACTOR=0, ISING_ON=False, PUSH_FACTOR=.01, BITE_COOLDOWN=100000))
