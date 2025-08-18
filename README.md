@@ -13,6 +13,9 @@ https://github.com/user-attachments/assets/a6624752-6f35-483a-9e20-7ab0ca887aa0
 # Program Usage
 Please note this software is not intended to be a widely distributed tool, and thus few failsafes have been implemented. Please read "Important Notes on Usage" if one wishes to use the program.
 - run(Population()) runs the simulation with all default values when isingsim.py is run
+- The program runs without user interaction, but the user may also interact in two ways:
+  - Clicking a cell swaps its state
+  - Dragging the thermostat on the left alters the signal responsiveness of the entire system
 - The results of the simulation are tabulated in sim.record and can be exported this way
 - Running data_vis.py will aggregate the data manually specified in the first few lines and then plot them in a scatterplot of energy usage (from defence activations and undefended attacks and their costs) vs. signal responsiveness.
 - A second plot to the right, cost of undefended attacks vs. cost of defence activation, can be interacted with by clicking once to lift the cost vector and clicking again to drop it. This sets the cost parameters which are used in the first graph.
