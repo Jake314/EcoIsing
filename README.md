@@ -3,6 +3,8 @@ A short-term biological modelling research project performed under the supervisi
 
 The goal was to simulate signal communication in a plant population using the Ising model, and observe the effect that varying signal responsiveness has on fitness. The simulation of the plants and herbivores is found in isingsim.py and the data collection and presentation is handled by data_vis.py.
 
+The report for this project can be found in [this repository](https://github.com/Jake314/EcoIsing/blob/7d806ae92661d5832415c0f4dfc986d6db327931/EcoIsingReport.pdf).
+
 # Simulation
 The Ising Model is simulated, with spin down (blue) representing an inactive defense state, and spin up (red) representing an active one. The defense state of an individual which has not been attacked randomly flips over time with a probability governed by two parameters: the defense states of the nearest neighbours, and a stochaistic effect (signal responsiveness).
 
